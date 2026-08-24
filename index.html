@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<title>Teleprompter</title>
+
+<style>
+:root {
+    --font-size: 48px;
+    --line-height: 1.45;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+    overflow: hidden;
+}
+
+/* EDITOR */
+
+#editor {
+    height: 100%;
+    overflow-y: auto;
+    padding: calc(25px + env(safe-area-inset-top))
+             20px
+             calc(30px + env(safe-area-inset-bottom));
+}
+
+h1 {
+    margin: 0 0 5px;
+    font-size: 30px;
+}
+
+.subtitle {
+    color: #999;
+    margin-bottom: 18px;
+}
+
+textarea {
+    width: 100%;
+    height: 45vh;
+    min-height: 250px;
+
+    background: #111;
+    color: #fff;
+
+    border: 1px solid #444;
+    border-radius: 15px;
+
+    padding: 18px;
+
+    font-size: 18px;
+    line-height: 1.5;
+
+    resize: none;
+    outline: none;
+}
+
+.panel {
+    margin-top: 15px;
+    padding: 15px;
+
+    background: #111;
+    border: 1px solid #292929;
+    border-radius: 15px;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 10px 0;
+}
+
+button {
+    border: none;
+    border-radius: 12px;
+
+    padding: 12px 16px;
+
+    background: #292929;
+    color: white;
+
+    font-weight: 600;
+}
+
+button.primary {
+    background: white;
+    color: black;
+}
+
+label {
+    color: #aaa;
+    width: 80px;
+    font-size: 14px;
+}
+
+input[type="range"] {
+    flex: 1;
+    min-width: 150px;
+    accent-color: white;
+}
+
+.value {
+    width: 70px;
+    text-align: right;
+    color: #ccc;
+    font-size: 14px;
+}
+
+.stats {
+    color: #888;
+    font-size: 13px;
+    margin-top: 10px;
+}
+
+/* TELEPROMPTER */
+
+#teleprompter {
+    display: none;
+
+    position: fixed;
+    inset: 0;
+
+    background: #000;
+
+    overflow: hidden;
+
+    z-index: 100;
+}
+
+#teleprompter.active {
+    display: block;
+}
+
+#textViewport {
+    position: absolute;
+    inset: 0;
+
+    overflow: hidden;
+}
+
+#scrollText {
+    position: absolute;
+
+    left: 50%;
+
+    width: 88vw;
+
+    transform: translateX(-50%);
+
+    padding-top: 50vh;
+    padding-bottom: 80vh;
+
+    font-size: var(--font-size);
+    line-height: var(--line-height);
+
+    font-weight: 500;
+
+    white-space: pre-wrap;
+
+    will-change: transform;
+}
+
+/* Mirror */
+
+#teleprompter.mirror #scrollText {
+    transform: translateX(-50%) scaleX(-1);
+}
+
+/* Center reading guide */
+
+#guide {
+    position: absolute;
+
+    left: 5%;
+    right: 5%;
+
+    top: 50%;
+
+    border-top: 2px solid rgba(255,255,255,.2);
+
+    pointer-events: none;
+}
+
+/* Controls */
+
+#topControls {
+    position: absolute;
+
+    top: 0;
+    left: 0;
+    right: 0;
+
+    z-index: 200;
+
+    display: flex;
+    justify-content: space-between;
+
+    padding:
+        calc(12px + env(safe-area-inset-top))
+        12px
+        12px;
+}
+
+#topControls button {
+    background: rgba(35,35,35,.8);
+}
+
+/* Bottom status */
+
+#status {
+    position: absolute;
+
+    bottom: calc(12px + env(safe-area-inset-bottom));
+
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    padding: 8px 12px;
+
+    border-radius: 20px;
+
+    background: rgba(25,25,25,.8);
+
+    color: #aaa;
+
+    font-size: 13px;
+
+    z-index: 200;
+}
+
+/* Progress */
+
+#progress {
+    position: absolute;
+
+    bottom: 0;
+    left: 0;
+
+    height: 3px;
+
+    width: 0%;
+
+    background: white;
+
+    z-index: 300;
+}
+
+/* Countdown */
+
+#countdown {
+    display: none;
+
+    position: absolute;
+
+    inset: 0;
+
+    align-items: center;
+    justify-content: center;
+
+    background: black;
+
+    font-size: 25vw;
+
+    font-weight: bold;
+
+    z-index: 500;
+}
+
+#countdown.active {
+    display: flex;
+}
+
+.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+@media (orientation: landscape) {
+
+    #scrollText {
+        width: 90vw;
+    }
+
+    textarea {
+        height: 35vh;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- EDITOR -->
+
+<div id="editor">
+
+    <h1>Teleprompter</h1>
+
+    <div class="subtitle">
+        Paste your transcript below.
+    </div>
+
+    <textarea
+        id="script"
+        placeholder="Paste your transcript here..."></textarea>
+
+    <div class="panel">
+
+        <div class="row">
+
+            <button
+                class="primary"
+                onclick="startTeleprompter()">
+                ▶ Start
+            </button>
+
+            <button onclick="saveScript()">
+                Save
+            </button>
+
+            <button onclick="loadScript()">
+                Load
+            </button>
+
+            <button onclick="clearScript()">
+                Clear
+            </button>
+
+        </div>
+
+
+        <div class="row">
+
+            <label>Speed</label>
+
+            <input
+                id="speed"
+                type="range"
+                min="0.2"
+                max="3"
+                step="0.1"
+                value="1"
+                oninput="updateSettings()">
+
+            <span
+                class="value"
+                id="speedValue">
+                1.0x
+            </span>
+
+        </div>
+
+
+        <div class="row">
+
+            <label>Font</label>
+
+            <input
+                id="font"
+                type="range"
+                min="28"
+                max="90"
+                value="48"
+                oninput="updateSettings()">
+
+            <span
+                class="value"
+                id="fontValue">
+                48px
+            </span>
+
+        </div>
+
+
+        <div class="row">
+
+            <label>Spacing</label>
+
+            <input
+                id="line"
+                type="range"
+                min="1.1"
+                max="2"
+                step="0.05"
+                value="1.45"
+                oninput="updateSettings()">
+
+            <span
+                class="value"
+                id="lineValue">
+                1.45
+            </span>
+
+        </div>
+
+
+        <div class="row">
+
+            <button onclick="toggleMirror()">
+                Mirror
+            </button>
+
+            <button onclick="goLandscape()">
+                Landscape
+            </button>
+
+            <button onclick="goFullscreen()">
+                Full Screen
+            </button>
+
+        </div>
+
+
+        <div
+            class="stats"
+            id="stats">
+            0 words
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- TELEPROMPTER -->
+
+<div id="teleprompter">
+
+    <div id="textViewport">
+
+        <div id="scrollText"></div>
+
+        <div id="guide"></div>
+
+    </div>
+
+
+    <div id="topControls">
+
+        <button onclick="exitTeleprompter()">
+            ✕ Exit
+        </button>
+
+        <button onclick="toggleScrolling()">
+            Pause
+        </button>
+
+    </div>
+
+
+    <div id="status">
+        Ready
+    </div>
+
+
+    <div id="progress"></div>
+
+
+    <div id="countdown">
+        3
+    </div>
+
+</div>
+
+
+<script>
+
+let running = false;
+
+let animationFrame = null;
+
+let lastTime = 0;
+
+let position = 0;
+
+let mirror = false;
+
+
+/* SETTINGS */
+
+function updateSettings() {
+
+    const speed =
+        document.getElementById("speed").value;
+
+    const font =
+        document.getElementById("font").value;
+
+    const line =
+        document.getElementById("line").value;
+
+
+    document.documentElement.style
+        .setProperty("--font-size", font + "px");
+
+    document.documentElement.style
+        .setProperty("--line-height", line);
+
+
+    document.getElementById("speedValue")
+        .textContent =
+        Number(speed).toFixed(1) + "x";
+
+    document.getElementById("fontValue")
+        .textContent =
+        font + "px";
+
+    document.getElementById("lineValue")
+        .textContent =
+        Number(line).toFixed(2);
+
+
+    const text =
+        document.getElementById("script").value;
+
+    const words =
+        text.trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .length;
+
+
+    document.getElementById("stats")
+        .textContent =
+        words + " words";
+}
+
+
+/* START */
+
+function startTeleprompter() {
+
+    const text =
+        document.getElementById("script").value.trim();
+
+
+    if (!text) {
+
+        alert("Paste your transcript first.");
+
+        return;
+    }
+
+
+    document.getElementById("scrollText")
+        .textContent = text;
+
+
+    document.getElementById("editor")
+        .style.display = "none";
+
+
+    document.getElementById("teleprompter")
+        .classList.add("active");
+
+
+    position = 0;
+
+    document.getElementById("scrollText")
+        .style.top = "0px";
+
+
+    countdown();
+}
+
+
+/* COUNTDOWN */
+
+function countdown() {
+
+    const box =
+        document.getElementById("countdown");
+
+
+    box.classList.add("active");
+
+
+    let number = 3;
+
+    box.textContent = number;
+
+
+    const timer =
+        setInterval(() => {
+
+            number--;
+
+            if (number <= 0) {
+
+                clearInterval(timer);
+
+                box.classList.remove("active");
+
+                startScrolling();
+
+                return;
+            }
+
+
+            box.textContent = number;
+
+        }, 700);
+}
+
+
+/* SCROLL */
+
+function startScrolling() {
+
+    running = true;
+
+    lastTime = performance.now();
+
+    document.getElementById("status")
+        .textContent = "Scrolling";
+
+    animationFrame =
+        requestAnimationFrame(scrollFrame);
+}
+
+
+function scrollFrame(time) {
+
+    if (!running)
+        return;
+
+
+    const delta =
+        time - lastTime;
+
+
+    lastTime = time;
+
+
+    const speed =
+        Number(
+            document.getElementById("speed").value
+        );
+
+
+    position -=
+        speed * delta * 0.035;
+
+
+    const text =
+        document.getElementById("scrollText");
+
+
+    text.style.top =
+        position + "px";
+
+
+    const height =
+        text.getBoundingClientRect().height;
+
+
+    const progress =
+        Math.min(
+            100,
+            Math.max(
+                0,
+                (-position /
+                Math.max(1,height)) * 100
+            )
+        );
+
+
+    document.getElementById("progress")
+        .style.width =
+        progress + "%";
+
+
+    if (
+        text.getBoundingClientRect().bottom > -20
+    ) {
+
+        animationFrame =
+            requestAnimationFrame(scrollFrame);
+
+    } else {
+
+        running = false;
+
+        document.getElementById("status")
+            .textContent =
+            "Finished";
+    }
+}
+
+
+/* PAUSE */
+
+function toggleScrolling() {
+
+    if (running) {
+
+        running = false;
+
+        cancelAnimationFrame(
+            animationFrame
+        );
+
+        document.getElementById("status")
+            .textContent =
+            "Paused";
+
+    } else {
+
+        running = true;
+
+        lastTime =
+            performance.now();
+
+        document.getElementById("status")
+            .textContent =
+            "Scrolling";
+
+        animationFrame =
+            requestAnimationFrame(
+                scrollFrame
+            );
+    }
+}
+
+
+/* EXIT */
+
+function exitTeleprompter() {
+
+    running = false;
+
+    cancelAnimationFrame(
+        animationFrame
+    );
+
+
+    document.getElementById("teleprompter")
+        .classList.remove("active");
+
+
+    document.getElementById("editor")
+        .style.display = "";
+
+
+    document.getElementById("progress")
+        .style.width = "0%";
+}
+
+
+/* MIRROR */
+
+function toggleMirror() {
+
+    mirror = !mirror;
+
+
+    const screen =
+        document.getElementById("teleprompter");
+
+
+    screen.classList.toggle(
+        "mirror",
+        mirror
+    );
+}
+
+
+/* FULL SCREEN */
+
+function goFullscreen() {
+
+    if (
+        document.documentElement
+            .requestFullscreen
+    ) {
+
+        document.documentElement
+            .requestFullscreen()
+            .catch(() => {});
+
+    }
+}
+
+
+/* LANDSCAPE */
+
+async function goLandscape() {
+
+    try {
+
+        if (
+            screen.orientation &&
+            screen.orientation.lock
+        ) {
+
+            await screen.orientation
+                .lock("landscape");
+
+        }
+
+    } catch (error) {}
+
+}
+
+
+/* SAVE */
+
+function saveScript() {
+
+    const text =
+        document.getElementById("script").value;
+
+
+    if (!text.trim()) {
+
+        alert("There is nothing to save.");
+
+        return;
+    }
+
+
+    localStorage.setItem(
+        "teleprompterScript",
+        text
+    );
+
+
+    alert("Script saved.");
+}
+
+
+/* LOAD */
+
+function loadScript() {
+
+    const saved =
+        localStorage.getItem(
+            "teleprompterScript"
+        );
+
+
+    if (!saved) {
+
+        alert("No saved script found.");
+
+        return;
+    }
+
+
+    document.getElementById("script")
+        .value = saved;
+
+
+    updateSettings();
+}
+
+
+/* CLEAR */
+
+function clearScript() {
+
+    document.getElementById("script")
+        .value = "";
+
+
+    updateSettings();
+}
+
+
+/* KEYBOARD */
+
+document.addEventListener(
+    "keydown",
+    function(event) {
+
+        const teleprompter =
+            document.getElementById(
+                "teleprompter"
+            );
+
+
+        if (
+            !teleprompter.classList
+                .contains("active")
+        ) {
+
+            return;
+        }
+
+
+        if (event.code === "Space") {
+
+            event.preventDefault();
+
+            toggleScrolling();
+        }
+
+
+        if (event.key === "ArrowUp") {
+
+            const speed =
+                document.getElementById(
+                    "speed"
+                );
+
+
+            speed.value =
+                Math.min(
+                    3,
+                    Number(speed.value) + 0.1
+                );
+
+
+            updateSettings();
+        }
+
+
+        if (event.key === "ArrowDown") {
+
+            const speed =
+                document.getElementById(
+                    "speed"
+                );
+
+
+            speed.value =
+                Math.max(
+                    0.2,
+                    Number(speed.value) - 0.1
+                );
+
+
+            updateSettings();
+        }
+
+
+        if (
+            event.key.toLowerCase() === "r"
+        ) {
+
+            position = 0;
+
+            document.getElementById(
+                "scrollText"
+            ).style.top = "0px";
+        }
+
+    }
+);
+
+
+/* TAP SCREEN TO PAUSE */
+
+document.getElementById(
+    "textViewport"
+).addEventListener(
+    "click",
+    function() {
+
+        toggleScrolling();
+
+    }
+);
+
+
+/* INITIAL SETTINGS */
+
+updateSettings();
+
+</script>
+
+</body>
+</html>
